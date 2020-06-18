@@ -1,0 +1,74 @@
+---
+- hosts: all
+  remote_user: ec2-user
+  gather_facts: False
+  become: true
+
+  vars:
+    USER: ec2-user
+    APP_PATH: /home/ec2-user/haproxy
+    DOCKER_HAPROXY_IMAGE: haproxy
+    DOCKER_APP_IMAGE: momo89/go-hostname
+  
+  tasks:
+    - name: Update yum packages
+      yum:
+        name: '*'
+        state: latest
+        update_cache: yes
+
+    - name: install docker
+      yum:
+        name: docker
+        state: latest
+
+    - name: service docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+ 
+    - name: Add user {{ USER }} to docker group
+      user:
+        name: "{{ USER }}"
+        groups: docker
+        append: yes
+      become: yes
+
+    - name: Install Python
+      yum:
+        name: python
+        state: latest
+
+    - name: Install Docker Module for Python
+      pip:
+        name: docker
+
+    - name: Pull HAProxy Docker image
+      docker_image:
+        name: "{{ DOCKER_HAPROXY_IMAGE }}"
+        source: pull
+
+    - name: Pull app Docker image
+      docker_image:
+        name: "{{ DOCKER_APP_IMAGE }}"
+        source: pull
+
+    - name: Creates directory
+      file:
+        path: "{{ APP_PATH }}"
+        state: directory
+
+    - name: Transfer Dockerfile
+      copy: src=Dockerfile dest={{ APP_PATH }} mode=0644
+
+    - name: Transfer haproxy config
+      copy: src=haproxy.cfg dest={{ APP_PATH }} mode=0644
+
+    - name: Transfer the script
+      copy: src=setup.sh dest={{ APP_PATH }} mode=0755
+
+    - name: Execute the script
+      args:
+        chdir: "{{ APP_PATH }}"
+      shell: "{{ APP_PATH }}/setup.sh"
